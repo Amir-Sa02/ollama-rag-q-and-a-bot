@@ -1,0 +1,19 @@
+# Python generated files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment folders
+env/
+venv/
+
+# Environment variables file
+*.env
+
+# System files
+.DS_Store
+
+# Documents and Generated Files
+*.docx
+*.pdf

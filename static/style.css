@@ -1,0 +1,21 @@
+/* File: static/style.css */
+/* This file contains all the custom CSS rules. */
+
+/* Use the Vazirmatn font for the entire page */
+body {
+    font-family: 'Vazirmatn', sans-serif;
+}
+
+/* Custom scrollbar for a sleeker look in the chat window */
+#chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+    background: #1f2937; /* dark gray track */
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+    background-color: #4b5563; /* slightly lighter gray thumb */
+    border-radius: 20px;
+}
