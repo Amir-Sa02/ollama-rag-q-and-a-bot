@@ -1,7 +1,3 @@
-# File: rag_core.py
-# This final version implements advanced prompt engineering with strict "guardrails"
-# to control the model's behavior and prevent hallucinations.
-
 import os
 from dotenv import load_dotenv
 from groq import Groq
