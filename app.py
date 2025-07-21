@@ -1,32 +1,39 @@
-# This is the backend web server, built with Flask.
-from flask import Flask, render_template, request, jsonify
+# File: app.py
+# This version now manages a simple in-memory chat history.
 
-# --- Import the core RAG function from our other file ---
+from flask import Flask, render_template, request, jsonify
 from rag_core import answer_with_rag
 
-# Initialize the Flask application
 app = Flask(__name__)
 
-# --- API Endpoints ---
+# --- Chat History Management ---
+# For this simple example, we'll use a global list to store the history.
+# NOTE: In a real multi-user application, this should be handled with user sessions.
+chat_history = []
 
 @app.route("/")
 def index():
-    """Serves the main HTML page."""
+    """Serves the main HTML page and resets the history for a new session."""
+    global chat_history
+    chat_history = [] # Reset history every time the page is reloaded
     return render_template("index.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Handles the chat message from the user and returns the model's response."""
+    """Handles the chat message and uses the history."""
+    global chat_history
     user_message = request.json.get("message")
     if not user_message:
         return jsonify({"error": "Message is required"}), 400
     
-    # --- Call the AI logic from rag_core.py ---
-    bot_response = answer_with_rag(user_message)
+    # --- Pass the current history to the RAG function ---
+    bot_response = answer_with_rag(user_message, chat_history)
+    
+    # --- Update the history with the new exchange ---
+    chat_history.append({"role": "user", "content": user_message})
+    chat_history.append({"role": "assistant", "content": bot_response})
     
     return jsonify({"response": bot_response})
 
-# --- Run the Application ---
 if __name__ == '__main__':
-    # Runs the Flask app on http://127.0.0.1:5000
     app.run(debug=True, port=5000)

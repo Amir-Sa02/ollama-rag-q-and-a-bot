@@ -1,33 +1,36 @@
 # File: rag_core.py
-# This version connects to the Groq cloud service to run Llama 3 online.
+# This final version implements advanced prompt engineering with strict "guardrails"
+# to control the model's behavior and prevent hallucinations.
 
 import os
-from groq import Groq  # Import the new library
+from dotenv import load_dotenv
+from groq import Groq
 import pandas as pd
 import json
 
-# --- Job 1: Initialize the Groq Client ---
-# It's recommended to set this as an environment variable for security,
-# but for this test, we'll place it directly in the code.
-# ❗ Replace "YOUR_GROQ_API_KEY_HERE" with the key you got from the Groq website.
+# --- Load environment variables ---
+load_dotenv()
+
+# --- Model Configuration ---
+MODEL_TO_USE = "llama-3.1-8b-instant"
+
+# --- Initialize Groq Client ---
 try:
-    client = Groq(
-        api_key="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",
-    )
-    print("✅ [RAG Core] Groq client initialized successfully.")
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    print(f"✅ [RAG Core] Groq client initialized. Using model: {MODEL_TO_USE}")
 except Exception as e:
     print(f"❌ [RAG Core] Error initializing Groq client: {e}")
     client = None
 
-# --- Job 2: Load the Knowledge Base (Unchanged) ---
+# --- Load Knowledge Base ---
 try:
     df = pd.read_csv('products.csv')
-    print("✅ [RAG Core] Product database loaded successfully.")
+    print("✅ [RAG Core] Product database loaded.")
 except FileNotFoundError:
     print("❌ [RAG Core] Error: 'products.csv' not found.")
     df = None
 
-# --- Job 3: Retriever and Context Formatter (Unchanged) ---
+# --- Retriever and Formatter (Unchanged) ---
 def find_relevant_products(query, dataframe, top_k=3):
     if dataframe is None: return []
     query_words = set(query.lower().split())
@@ -41,7 +44,7 @@ def find_relevant_products(query, dataframe, top_k=3):
     return [product_data for score, product_data in scores[:top_k]]
 
 def format_context_for_llm(context_data_list):
-    if not context_data_list: return "هیچ محصول مرتبطی پیدا نشد."
+    if not context_data_list: return ""
     full_context = ""
     for i, product in enumerate(context_data_list, 1):
         full_context += f"--- محصول شماره {i} ---\n"
@@ -59,51 +62,49 @@ def format_context_for_llm(context_data_list):
         full_context += "\n"
     return full_context.strip()
 
-# --- Job 4: The Main RAG Logic (Updated to call Groq API) ---
-def answer_with_rag(question):
+# --- Main RAG Logic (with Guardrails) ---
+def answer_with_rag(question, history):
     if df is None: return "Database not loaded."
-    if client is None: return "Groq client not initialized. Please check your API key."
+    if client is None: return "Groq client not initialized."
 
+    # --- Step 1: Handle Conversational Chit-Chat FIRST ---
+    # This prevents unnecessary database searches for simple greetings.
+    if not history: # Only for the first message of a conversation
+        if any(word in question.lower() for word in ["سلام", "خوبی", "چطوری"]):
+            return "سلام! من یک دستیار هوشمند برای محصولات الکترونیکی هستم. خوشحالم که با شما صحبت می‌کنم. چطور می‌توانم در انتخاب محصول به شما کمک کنم؟"
+
+    # --- Step 2: Retrieval ---
     relevant_products = find_relevant_products(question, df)
-    
-    if relevant_products:
-        readable_context = format_context_for_llm(relevant_products)
-        
-        prompt = f"""
-شما یک متخصص فروش بسیار باهوش و مفید در یک فروشگاه لوازم الکترونیکی هستید.
-وظیفه شما این است که با استفاده از "لیست محصولات مرتبط" زیر، بهترین پاسخ یا پیشنهاد را به "سوال کاربر" ارائه دهید.
-پاسخ شما باید کاملاً بر اساس اطلاعات داده شده باشد، اما آن را به صورت یک پاراگراف روان، طبیعی و محاوره‌ای به زبان فارسی بیان کنید.
+    readable_context = format_context_for_llm(relevant_products)
 
-[لیست محصولات مرتبط]
-{readable_context}
+    # --- Step 3: Advanced Prompt Engineering with Guardrails ---
+    system_prompt = """
+شما یک دستیار هوش مصنوعی به نام "تک‌یار" هستید که متخصص فروش در یک فروشگاه لوازم الکترونیکی است. شخصیت شما خوش‌برخورد، مفید و کاملاً حرفه‌ای است.
 
-[سوال کاربر]
-{question}
-
-[پاسخ پیشنهادی شما]
+**قوانین رفتاری شما (بسیار مهم):**
+1.  **حفظ حوزه تخصصی:** شما فقط و فقط در مورد محصولات الکترونیکی (لپ‌تاپ، موبایل، قطعات کامپیوتر و...) صحبت می‌کنید. اگر سوالی خارج از این حوزه پرسیده شد (مانند ادبیات، تاریخ، حیوانات و...)، با احترام پاسخ دهید که تخصص شما در این زمینه نیست و گفتگو را به سمت محصولات الکترونیکی هدایت کنید.
+2.  **پایبندی کامل به منبع:** پاسخ‌های شما باید **همیشه و فقط** بر اساس "اطلاعات محصول مرتبط" که در ادامه ارائه می‌شود، باشد. **هرگز، تحت هیچ شرایطی، محصولی را از خود ابداع نکنید.** اگر اطلاعاتی در منبع وجود نداشت، به صراحت بگویید که آن اطلاعات را در اختیار ندارید.
+3.  **رفتار محاوره‌ای:** با کاربران به صورت دوستانه صحبت کنید. اگر کاربر جوک گفت یا تشکر کرد، پاسخ مناسبی بدهید، اما همیشه در نهایت به وظیفه اصلی خود به عنوان دستیار خرید برگردید.
+4.  **استفاده از تاریخچه:** از تاریخچه مکالمه برای درک بهتر سوالات بعدی کاربر استفاده کنید تا مکالمه‌ای طبیعی و منسجم داشته باشید.
 """
-        try:
-            # --- THIS IS THE CRITICAL CHANGE ---
-            # We now call the Groq API instead of the local Ollama.
-            chat_completion = client.chat.completions.create(
-                messages=[
-                    # The prompt is now sent directly as the user message.
-                    # The Groq API doesn't use a separate system prompt in the same way.
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-                model="llama3-8b-8192", # This is Groq's name for the Llama 3 8B model
-                temperature=0.5,
-                max_tokens=512,
-            )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            print(f"❌ Error calling Groq API: {e}")
-            return "متاسفانه در ارتباط با سرویس آنلاین خطایی رخ داد."
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history)
+    
+    user_content = f"سوال کاربر: {question}"
+    if readable_context:
+        user_content += f"\n\n[اطلاعات محصول مرتبط]\n{readable_context}"
+    
+    messages.append({"role": "user", "content": user_content})
 
-    else:
-        if any(word in question.lower() for word in ["سلام", "خوبی"]):
-            return "سلام! من یک دستیار هوشمند محصولات هستم. چطور می‌توانم کمکتان کنم؟"
-        return "متاسفانه محصولی که با درخواست شما مطابقت داشته باشد، پیدا نشد."
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=messages,
+            model=MODEL_TO_USE,
+            temperature=0.7,
+            max_tokens=512,
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        print(f"❌ Error calling Groq API: {e}")
+        return "متاسفانه در ارتباط با سرویس آنلاین خطایی رخ داد."

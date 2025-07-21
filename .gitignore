@@ -10,6 +10,7 @@ venv/
 
 # Environment variables file
 *.env
+*..env-deepseek
 
 # System files
 .DS_Store
