@@ -1,23 +1,10 @@
-import os
-from dotenv import load_dotenv
-from groq import Groq
+import ollama
 import pandas as pd
 import json
 
-# Load environment variables from .env file
-load_dotenv()
-
 # Model Configuration
-MODEL_TO_USE = "llama-3.1-8b-instant"
-
-# Initialize Groq Client
-try:
-    # Create a communication way with Groq client and allocate read API key to it
-    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    print(f"✅ [RAG Core] Groq client initialized. Using model: {MODEL_TO_USE}")
-except Exception as e:
-    print(f"❌ [RAG Core] Error initializing Groq client: {e}")
-    client = None
+# We now point to the local model downloaded with Ollama.
+MODEL_TO_USE = "llama3.1:8b"
 
 # Load Knowledge Base
 try:
@@ -85,7 +72,6 @@ def format_context_for_llm(context_data_list):
 # Main RAG Logic (with Guardrails)
 def answer_with_rag(question, history):
     if df is None: return "Database not loaded."
-    if client is None: return "Groq client not initialized."
 
     # --- Step 1: Retrieval ---
     relevant_products = find_relevant_products(question, df)
@@ -112,13 +98,15 @@ def answer_with_rag(question, history):
     messages.append({"role": "user", "content": user_content})
 
     try:
-        chat_completion = client.chat.completions.create(
+        # We now call the local Ollama service instead of the Groq API.
+        response = ollama.chat(
             messages=messages,
             model=MODEL_TO_USE,
-            temperature=0, # Controls the randomness and creativity of the model's output
-            max_tokens=512, # The maximum length of output
+            options={
+                'temperature': 0.2
+            }
         )
-        return chat_completion.choices[0].message.content
+        return response['message']['content']
     except Exception as e:
-        print(f"❌ Error calling Groq API: {e}")
-        return "متاسفانه در ارتباط با سرویس آنلاین خطایی رخ داد."
+        print(f"❌ Error calling local Ollama model: {e}")
+        return "در ارتباط با سرویس محلی خطایی رخ داد"
